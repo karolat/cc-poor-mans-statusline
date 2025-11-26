@@ -1,0 +1,26 @@
+# Credentials and tokens
+.credentials.json
+credentials.json
+*.token
+*.key
+
+# Cache files
+claude-usage-cache.json
+/tmp/claude-usage-cache.json
+
+# Personal test data
+test-credentials.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Test outputs
+test-output/
