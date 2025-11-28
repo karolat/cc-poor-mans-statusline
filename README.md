@@ -1,38 +1,46 @@
 # Poor Man's Statusline
 
-Lightweight custom statusline for Claude Code showing usage limits, model availability, and context window.
+Lightweight custom statusline for Claude Code with Powerline-style segments, usage limits, reset timers, and context monitoring.
 
 ## Features
 
-- Real-time API usage (5-hour limit, 7-day limit for higher tiers)
-- Per-model availability (Opus and Sonnet) - only shown when available
+- **Powerline-style segments** with colored backgrounds and smooth arrow transitions
+- **Reset timers** showing countdown AND absolute time until limits reset (e.g., "2h11m @ 10pm")
+- Real-time API usage (5-hour and 7-day limits)
+- Per-model availability (Opus and Sonnet with distinct colors)
 - Context window monitoring with auto-compact warning
 - 1-minute smart caching
-- Color-coded indicators (green/yellow/red)
 - Automatically adapts to your Claude Pro tier (basic or higher)
 
 ## Example Output
 
 **Claude Pro (higher tiers with 7-day limits):**
 ```
-[claude-sonnet-4-5-20250929] alex@hostname:project (main)
-  Opus: 18% | Sonnet: 13%
-  5h: 32% | 7d: 18%
-  CTX: 98.8K 49%
+ opus-4-5  project  main
+ 5h 27%  2h11m @ 10pm   7d 34%  4d2h @ Dec 2
+ Opus 34%  Sonnet 20%
 ```
 
 **Claude Pro (basic tier):**
 ```
-[claude-sonnet-4-5-20250929] alex@hostname:project (main)
-  5h: 44%
-  CTX: 23.8K 11%
+ sonnet-4-5  project  main
+ 5h 45%  3h30m @ 2pm
 ```
+
+**Color scheme:**
+- Magenta: Model name, Opus limit
+- Yellow: Project directory
+- Green: Git branch
+- Cyan: Usage percentages
+- Blue: Reset countdowns, Sonnet limit
+- Gray: Context info
 
 ## Prerequisites
 
 - Claude Code (installed and authenticated)
 - `jq` - JSON processor
 - `curl` - HTTP client
+- Terminal with 256-color support
 
 ```bash
 # macOS
@@ -80,6 +88,10 @@ AUTO_COMPACT_THRESHOLD=160000  # Warning threshold (80%)
 
 **Context not showing?**
 - Context only appears during active conversations
+
+**Powerline arrows not rendering?**
+- Ensure your terminal supports Unicode (U+E0B0)
+- Most modern terminals work out of the box
 
 ## Security
 
