@@ -156,7 +156,7 @@ format_absolute_time() {
 
 CACHE_FILE="/tmp/claude-usage-cache.json"
 CACHE_TTL=60  # 1 minute in seconds
-CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
+KEYCHAIN_SERVICE="Claude Code-credentials"
 
 # Function to check if cache is valid
 is_cache_valid() {
@@ -179,14 +179,9 @@ is_cache_valid() {
 
 # Function to fetch usage from API
 fetch_usage() {
-    # Check if credentials file exists
-    if [ ! -f "$CREDENTIALS_FILE" ]; then
-        return 1
-    fi
-
-    # Extract access token
+    # Extract access token from macOS Keychain
     local token
-    token=$(jq -r '.claudeAiOauth.accessToken // empty' "$CREDENTIALS_FILE" 2>/dev/null)
+    token=$(security find-generic-password -s "$KEYCHAIN_SERVICE" -w 2>/dev/null | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
     if [ -z "$token" ]; then
         return 1
     fi
