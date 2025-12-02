@@ -426,15 +426,14 @@ format_context() {
 # BUILD THE POWERLINE STATUS LINE
 # ============================================
 
-# Color definitions (256-color palette)
-C_MAGENTA=5    # Model, Opus
-C_YELLOW=3     # Project
-C_GREEN=2      # Branch
-C_CYAN=6       # Usage limits
-C_BLUE=4       # Reset times, Sonnet
-C_GRAY=8       # Context
-C_WHITE=15     # Light text
-C_BLACK=0      # Dark text
+# Color definitions (256-color palette) - Dark theme optimized
+C_PURPLE=97    # Dusty purple - Model name, Opus
+C_SLATE=54     # Very dark purple - Project, Usage limits
+C_DARK=53      # Darkest purple - Branch
+C_STEEL=55     # Dark purple-blue - Reset times, Sonnet
+C_GRAY=238     # Very dark gray - Context
+C_WHITE=252    # Off-white text
+C_BLACK=232    # Near-black text
 
 # Shorten model name (e.g., "claude-sonnet-4-5-20250929" → "sonnet-4-5")
 short_model=$(echo "$model_name" | sed 's/^claude-//' | sed 's/-[0-9]\{8\}$//')
@@ -444,12 +443,12 @@ short_model=$(echo "$model_name" | sed 's/^claude-//' | sed 's/-[0-9]\{8\}$//')
 # ============================================
 row1=""
 if [ -n "$branch" ]; then
-    row1=$(pl_segment $C_MAGENTA $C_WHITE "$short_model" $C_YELLOW)
-    row1="${row1}$(pl_segment $C_YELLOW $C_BLACK "$dir_name" $C_GREEN)"
-    row1="${row1}$(pl_segment_end $C_GREEN $C_BLACK "$branch")"
+    row1=$(pl_segment $C_PURPLE $C_WHITE "$short_model" $C_SLATE)
+    row1="${row1}$(pl_segment $C_SLATE $C_WHITE "$dir_name" $C_DARK)"
+    row1="${row1}$(pl_segment_end $C_DARK $C_WHITE "$branch")"
 else
-    row1=$(pl_segment $C_MAGENTA $C_WHITE "$short_model" $C_YELLOW)
-    row1="${row1}$(pl_segment_end $C_YELLOW $C_BLACK "$dir_name")"
+    row1=$(pl_segment $C_PURPLE $C_WHITE "$short_model" $C_SLATE)
+    row1="${row1}$(pl_segment_end $C_SLATE $C_WHITE "$dir_name")"
 fi
 printf "%b\n" "$row1"
 
@@ -477,26 +476,26 @@ if [ -n "$usage_data" ]; then
 
             # Build 5h segment
             if [ -n "$five_h_countdown" ] && [ -n "$five_h_absolute" ]; then
-                row2=$(pl_segment $C_CYAN $C_BLACK "5h ${five_h_int}%" $C_BLUE)
-                row2="${row2}$(pl_segment $C_BLUE $C_WHITE "${five_h_countdown} @ ${five_h_absolute}" $C_CYAN)"
+                row2=$(pl_segment $C_SLATE $C_WHITE "5h ${five_h_int}%" $C_STEEL)
+                row2="${row2}$(pl_segment $C_STEEL $C_WHITE "${five_h_countdown} @ ${five_h_absolute}" $C_SLATE)"
             else
-                row2=$(pl_segment $C_CYAN $C_BLACK "5h ${five_h_int}%" $C_CYAN)
+                row2=$(pl_segment $C_SLATE $C_WHITE "5h ${five_h_int}%" $C_SLATE)
             fi
 
             # Build 7d segment
             if [ -n "$seven_d_countdown" ] && [ -n "$seven_d_absolute" ]; then
-                row2="${row2}$(pl_segment $C_CYAN $C_BLACK "7d ${seven_d_int}%" $C_BLUE)"
-                row2="${row2}$(pl_segment_end $C_BLUE $C_WHITE "${seven_d_countdown} @ ${seven_d_absolute}")"
+                row2="${row2}$(pl_segment $C_SLATE $C_WHITE "7d ${seven_d_int}%" $C_STEEL)"
+                row2="${row2}$(pl_segment_end $C_STEEL $C_WHITE "${seven_d_countdown} @ ${seven_d_absolute}")"
             else
-                row2="${row2}$(pl_segment_end $C_CYAN $C_BLACK "7d ${seven_d_int}%")"
+                row2="${row2}$(pl_segment_end $C_SLATE $C_WHITE "7d ${seven_d_int}%")"
             fi
         else
             # Basic tier: only 5h
             if [ -n "$five_h_countdown" ] && [ -n "$five_h_absolute" ]; then
-                row2=$(pl_segment $C_CYAN $C_BLACK "5h ${five_h_int}%" $C_BLUE)
-                row2="${row2}$(pl_segment_end $C_BLUE $C_WHITE "${five_h_countdown} @ ${five_h_absolute}")"
+                row2=$(pl_segment $C_SLATE $C_WHITE "5h ${five_h_int}%" $C_STEEL)
+                row2="${row2}$(pl_segment_end $C_STEEL $C_WHITE "${five_h_countdown} @ ${five_h_absolute}")"
             else
-                row2=$(pl_segment_end $C_CYAN $C_BLACK "5h ${five_h_int}%")
+                row2=$(pl_segment_end $C_SLATE $C_WHITE "5h ${five_h_int}%")
             fi
         fi
 
@@ -526,13 +525,13 @@ if [ -n "$usage_data" ]; then
             sonnet_int=${seven_day%.*}
         fi
 
-        row3=$(pl_segment $C_MAGENTA $C_WHITE "Opus ${opus_int}%" $C_BLUE)
+        row3=$(pl_segment $C_PURPLE $C_WHITE "Opus ${opus_int}%" $C_STEEL)
         # Check if context will follow (peek ahead)
         ctx_check=$(format_context)
         if [ -n "$ctx_check" ]; then
-            row3="${row3}$(pl_segment $C_BLUE $C_WHITE "Sonnet ${sonnet_int}%" $C_GRAY)"
+            row3="${row3}$(pl_segment $C_STEEL $C_WHITE "Sonnet ${sonnet_int}%" $C_GRAY)"
         else
-            row3="${row3}$(pl_segment_end $C_BLUE $C_WHITE "Sonnet ${sonnet_int}%")"
+            row3="${row3}$(pl_segment_end $C_STEEL $C_WHITE "Sonnet ${sonnet_int}%")"
         fi
     fi
 fi
