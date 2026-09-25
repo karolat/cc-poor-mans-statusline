@@ -437,6 +437,8 @@ C_BLACK=232    # Near-black text
 
 # Shorten model name (e.g., "claude-sonnet-4-5-20250929" → "sonnet-4-5")
 short_model=$(echo "$model_name" | sed 's/^claude-//' | sed 's/-[0-9]\{8\}$//')
+effort_level=$(echo "$input" | jq -r '.effort.level // empty')
+[ -n "$effort_level" ] && short_model="${short_model}-${effort_level}"
 
 # ============================================
 # ROW 1: Model → Project → Branch
