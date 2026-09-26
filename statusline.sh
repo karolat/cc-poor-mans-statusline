@@ -51,24 +51,11 @@ pl_segment_end() {
 # TIME FORMATTING FUNCTIONS
 # ============================================
 
-# Format countdown from ISO timestamp (e.g., "4h23m" or "2d5h")
-# Args: $1 = ISO timestamp, $2 = type ("5h" or "7d")
+# Format countdown from epoch timestamp (e.g., "4h23m" or "2d5h")
+# Args: $1 = epoch seconds, $2 = type ("5h" or "7d")
 format_countdown() {
-    local iso_ts=$1
+    local reset_epoch=$1
     local type=$2
-
-    if [ -z "$iso_ts" ] || [ "$iso_ts" = "null" ]; then
-        echo ""
-        return
-    fi
-
-    # Strip timezone suffix and milliseconds for macOS date parsing
-    local ts_clean
-    ts_clean=$(echo "$iso_ts" | sed 's/+00:00$//' | sed 's/Z$//' | sed 's/\.[0-9]*//')
-
-    # Parse ISO timestamp to epoch (macOS format) - use TZ=UTC since API returns UTC times
-    local reset_epoch
-    reset_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$ts_clean" "+%s" 2>/dev/null)
 
     if [ -z "$reset_epoch" ]; then
         echo ""
@@ -107,24 +94,11 @@ format_countdown() {
     fi
 }
 
-# Format absolute time from ISO timestamp (e.g., "6PM" or "Dec 5")
-# Args: $1 = ISO timestamp, $2 = type ("5h" or "7d")
+# Format absolute time from epoch timestamp (e.g., "6PM" or "Dec 5")
+# Args: $1 = epoch seconds, $2 = type ("5h" or "7d")
 format_absolute_time() {
-    local iso_ts=$1
+    local epoch=$1
     local type=$2
-
-    if [ -z "$iso_ts" ] || [ "$iso_ts" = "null" ]; then
-        echo ""
-        return
-    fi
-
-    # Strip timezone suffix and milliseconds for macOS date parsing
-    local ts_clean
-    ts_clean=$(echo "$iso_ts" | sed 's/+00:00$//' | sed 's/Z$//' | sed 's/\.[0-9]*//')
-
-    # Parse as UTC to get correct epoch, then format in local time
-    local epoch
-    epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$ts_clean" "+%s" 2>/dev/null)
 
     if [ -z "$epoch" ]; then
         echo ""
@@ -151,115 +125,11 @@ format_absolute_time() {
 }
 
 # ============================================
-# USAGE LIMITS FUNCTIONS
+# CONTEXT USAGE FUNCTIONS
 # ============================================
 
-CACHE_FILE="/tmp/claude-usage-cache.json"
-CACHE_TTL=60  # 1 minute in seconds
-KEYCHAIN_SERVICE="Claude Code-credentials"
-
-# Function to check if cache is valid
-is_cache_valid() {
-    if [ ! -f "$CACHE_FILE" ]; then
-        return 1
-    fi
-
-    local cache_time
-    cache_time=$(jq -r '.timestamp // 0' "$CACHE_FILE" 2>/dev/null)
-    local current_time
-    current_time=$(date +%s)
-    local age=$((current_time - cache_time))
-
-    if [ "$age" -lt "$CACHE_TTL" ]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Function to fetch usage from API
-fetch_usage() {
-    # Extract access token from macOS Keychain
-    local token
-    token=$(security find-generic-password -s "$KEYCHAIN_SERVICE" -w 2>/dev/null | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
-    if [ -z "$token" ]; then
-        return 1
-    fi
-
-    # Make API request with 2 second timeout
-    local response
-    response=$(curl -s --max-time 2 \
-        -H "Authorization: Bearer $token" \
-        -H "anthropic-beta: oauth-2025-04-20" \
-        -H "Content-Type: application/json" \
-        "https://api.anthropic.com/api/oauth/usage" 2>/dev/null)
-
-    if ! [ -n "$response" ]; then
-        return 1
-    fi
-
-    # Parse response - utilization values
-    local five_hour
-    five_hour=$(echo "$response" | jq -r '.five_hour.utilization // null' 2>/dev/null)
-    local seven_day
-    seven_day=$(echo "$response" | jq -r '.seven_day.utilization // null' 2>/dev/null)
-    local seven_day_opus
-    seven_day_opus=$(echo "$response" | jq -r '.seven_day_opus.utilization // null' 2>/dev/null)
-    local seven_day_sonnet
-    seven_day_sonnet=$(echo "$response" | jq -r '.seven_day_sonnet.utilization // null' 2>/dev/null)
-
-    # Parse response - reset timestamps
-    local five_hour_resets
-    five_hour_resets=$(echo "$response" | jq -r '.five_hour.resets_at // null' 2>/dev/null)
-    local seven_day_resets
-    seven_day_resets=$(echo "$response" | jq -r '.seven_day.resets_at // null' 2>/dev/null)
-
-    # At least five_hour is required
-    if [ "$five_hour" = "null" ]; then
-        return 1
-    fi
-
-    # Write to cache with model-specific data and reset timestamps
-    local current_time
-    current_time=$(date +%s)
-    jq -n \
-        --argjson ts "$current_time" \
-        --argjson fh "$five_hour" \
-        --arg fhr "$five_hour_resets" \
-        --argjson sd "$seven_day" \
-        --arg sdr "$seven_day_resets" \
-        --argjson sdo "${seven_day_opus:-null}" \
-        --argjson sds "${seven_day_sonnet:-null}" \
-        '{timestamp: $ts, five_hour: $fh, five_hour_resets: $fhr, seven_day: $sd, seven_day_resets: $sdr, seven_day_opus: $sdo, seven_day_sonnet: $sds}' \
-        > "$CACHE_FILE"
-
-    # Output space-separated values (includes reset timestamps)
-    echo "$five_hour $seven_day $seven_day_opus $seven_day_sonnet $five_hour_resets $seven_day_resets"
-    return 0
-}
-
-# Function to get usage (from cache or API)
-get_usage() {
-    if is_cache_valid; then
-        # Read from cache
-        local five_hour
-        five_hour=$(jq -r '.five_hour' "$CACHE_FILE" 2>/dev/null)
-        local seven_day
-        seven_day=$(jq -r '.seven_day' "$CACHE_FILE" 2>/dev/null)
-        local seven_day_opus
-        seven_day_opus=$(jq -r '.seven_day_opus // "null"' "$CACHE_FILE" 2>/dev/null)
-        local seven_day_sonnet
-        seven_day_sonnet=$(jq -r '.seven_day_sonnet // "null"' "$CACHE_FILE" 2>/dev/null)
-        local five_hour_resets
-        five_hour_resets=$(jq -r '.five_hour_resets // "null"' "$CACHE_FILE" 2>/dev/null)
-        local seven_day_resets
-        seven_day_resets=$(jq -r '.seven_day_resets // "null"' "$CACHE_FILE" 2>/dev/null)
-        echo "$five_hour $seven_day $seven_day_opus $seven_day_sonnet $five_hour_resets $seven_day_resets"
-    else
-        # Fetch from API
-        fetch_usage
-    fi
-}
+CONTEXT_WINDOW=200000  # Claude Sonnet 4.5 context window
+AUTO_COMPACT_THRESHOLD=160000  # 80% of context window
 
 # Function to format percentage with color coding
 format_percentage() {
@@ -281,47 +151,6 @@ format_percentage() {
     # Return colored percentage only (no bar)
     printf "${color}%d%%\033[0m" "$pct_int"
 }
-
-# Function to format a model's usage percentage
-# Args: $1 = model name (e.g., "Opus"), $2 = percentage (or "null")
-format_model_usage() {
-    local model_name=$1
-    local percentage=$2
-
-    # Natural formatting without fixed width
-    local formatted_name="${model_name}:"
-
-    # Handle null values
-    if [ "$percentage" = "null" ] || [ -z "$percentage" ]; then
-        # Gray color for null/unavailable
-        printf "%s \033[1;30m--\033[0m" "$formatted_name"
-    else
-        # Normal color-coded percentage
-        local pct_formatted
-        pct_formatted=$(format_percentage "$percentage")
-        printf "%s %s" "$formatted_name" "$pct_formatted"
-    fi
-}
-
-# Function to get usage data as associative-style output
-# Returns: five_hour seven_day seven_day_opus seven_day_sonnet five_hour_resets seven_day_resets
-get_usage_data() {
-    local usage_data
-    usage_data=$(get_usage)
-
-    if [ -z "$usage_data" ]; then
-        return 1
-    fi
-
-    echo "$usage_data"
-}
-
-# ============================================
-# CONTEXT USAGE FUNCTIONS
-# ============================================
-
-CONTEXT_WINDOW=200000  # Claude Sonnet 4.5 context window
-AUTO_COMPACT_THRESHOLD=160000  # 80% of context window
 
 # Function to format token count (e.g., 35234 → "35.2K")
 format_token_count() {
@@ -457,86 +286,60 @@ printf "%b\n" "$row1"
 # ============================================
 # ROW 2: Usage Limits with Reset Times
 # ============================================
-usage_data=$(get_usage_data)
-if [ -n "$usage_data" ]; then
-    read -r five_hour seven_day seven_day_opus seven_day_sonnet five_hour_resets seven_day_resets <<< "$usage_data"
+# Usage limits come straight from Claude Code's statusline input (no API call needed)
+five_hour=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
+five_hour_resets=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
+seven_day=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty')
+seven_day_resets=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty')
 
-    if [ -n "$five_hour" ] && [ "$five_hour" != "null" ]; then
-        # Format 5h percentage
-        five_h_int=${five_hour%.*}
+if [ -n "$five_hour" ]; then
+    # Format 5h percentage
+    five_h_int=${five_hour%.*}
 
-        # Build 5h reset info
-        five_h_countdown=$(format_countdown "$five_hour_resets" "5h")
-        five_h_absolute=$(format_absolute_time "$five_hour_resets" "5h")
+    # Build 5h reset info
+    five_h_countdown=$(format_countdown "$five_hour_resets" "5h")
+    five_h_absolute=$(format_absolute_time "$five_hour_resets" "5h")
 
-        row2=""
-        if [ "$seven_day" != "null" ] && [ -n "$seven_day" ]; then
-            # Full display: 5h and 7d
-            seven_d_int=${seven_day%.*}
-            seven_d_countdown=$(format_countdown "$seven_day_resets" "7d")
-            seven_d_absolute=$(format_absolute_time "$seven_day_resets" "7d")
+    row2=""
+    if [ -n "$seven_day" ]; then
+        # Full display: 5h and 7d
+        seven_d_int=${seven_day%.*}
+        seven_d_countdown=$(format_countdown "$seven_day_resets" "7d")
+        seven_d_absolute=$(format_absolute_time "$seven_day_resets" "7d")
 
-            # Build 5h segment
-            if [ -n "$five_h_countdown" ] && [ -n "$five_h_absolute" ]; then
-                row2=$(pl_segment $C_SLATE $C_WHITE "5h ${five_h_int}%" $C_STEEL)
-                row2="${row2}$(pl_segment $C_STEEL $C_WHITE "${five_h_countdown} @ ${five_h_absolute}" $C_SLATE)"
-            else
-                row2=$(pl_segment $C_SLATE $C_WHITE "5h ${five_h_int}%" $C_SLATE)
-            fi
-
-            # Build 7d segment
-            if [ -n "$seven_d_countdown" ] && [ -n "$seven_d_absolute" ]; then
-                row2="${row2}$(pl_segment $C_SLATE $C_WHITE "7d ${seven_d_int}%" $C_STEEL)"
-                row2="${row2}$(pl_segment_end $C_STEEL $C_WHITE "${seven_d_countdown} @ ${seven_d_absolute}")"
-            else
-                row2="${row2}$(pl_segment_end $C_SLATE $C_WHITE "7d ${seven_d_int}%")"
-            fi
+        # Build 5h segment
+        if [ -n "$five_h_countdown" ] && [ -n "$five_h_absolute" ]; then
+            row2=$(pl_segment $C_SLATE $C_WHITE "5h ${five_h_int}%" $C_STEEL)
+            row2="${row2}$(pl_segment $C_STEEL $C_WHITE "${five_h_countdown} @ ${five_h_absolute}" $C_SLATE)"
         else
-            # Basic tier: only 5h
-            if [ -n "$five_h_countdown" ] && [ -n "$five_h_absolute" ]; then
-                row2=$(pl_segment $C_SLATE $C_WHITE "5h ${five_h_int}%" $C_STEEL)
-                row2="${row2}$(pl_segment_end $C_STEEL $C_WHITE "${five_h_countdown} @ ${five_h_absolute}")"
-            else
-                row2=$(pl_segment_end $C_SLATE $C_WHITE "5h ${five_h_int}%")
-            fi
+            row2=$(pl_segment $C_SLATE $C_WHITE "5h ${five_h_int}%" $C_SLATE)
         fi
 
-        printf "%b\n" "$row2"
+        # Build 7d segment
+        if [ -n "$seven_d_countdown" ] && [ -n "$seven_d_absolute" ]; then
+            row2="${row2}$(pl_segment $C_SLATE $C_WHITE "7d ${seven_d_int}%" $C_STEEL)"
+            row2="${row2}$(pl_segment_end $C_STEEL $C_WHITE "${seven_d_countdown} @ ${seven_d_absolute}")"
+        else
+            row2="${row2}$(pl_segment_end $C_SLATE $C_WHITE "7d ${seven_d_int}%")"
+        fi
+    else
+        # Basic tier: only 5h
+        if [ -n "$five_h_countdown" ] && [ -n "$five_h_absolute" ]; then
+            row2=$(pl_segment $C_SLATE $C_WHITE "5h ${five_h_int}%" $C_STEEL)
+            row2="${row2}$(pl_segment_end $C_STEEL $C_WHITE "${five_h_countdown} @ ${five_h_absolute}")"
+        else
+            row2=$(pl_segment_end $C_SLATE $C_WHITE "5h ${five_h_int}%")
+        fi
     fi
+
+    printf "%b\n" "$row2"
 fi
 
 # ============================================
-# ROW 3: Model Limits + Context
+# ROW 3: Context
 # ============================================
 row3=""
 has_row3=false
-
-# Model-specific limits (only if 7d data exists)
-if [ -n "$usage_data" ]; then
-    read -r five_hour seven_day seven_day_opus seven_day_sonnet five_hour_resets seven_day_resets <<< "$usage_data"
-
-    if [ "$seven_day" != "null" ] && [ -n "$seven_day" ]; then
-        has_row3=true
-        # Opus uses overall 7d
-        opus_int=${seven_day%.*}
-
-        # Sonnet: use dedicated limit if available
-        if [ "$seven_day_sonnet" != "null" ] && [ -n "$seven_day_sonnet" ]; then
-            sonnet_int=${seven_day_sonnet%.*}
-        else
-            sonnet_int=${seven_day%.*}
-        fi
-
-        row3=$(pl_segment $C_PURPLE $C_WHITE "Opus ${opus_int}%" $C_STEEL)
-        # Check if context will follow (peek ahead)
-        ctx_check=$(format_context)
-        if [ -n "$ctx_check" ]; then
-            row3="${row3}$(pl_segment $C_STEEL $C_WHITE "Sonnet ${sonnet_int}%" $C_GRAY)"
-        else
-            row3="${row3}$(pl_segment_end $C_STEEL $C_WHITE "Sonnet ${sonnet_int}%")"
-        fi
-    fi
-fi
 
 # Context usage
 context_result=$(format_context)

@@ -6,40 +6,33 @@ Lightweight custom statusline for Claude Code with Powerline-style segments, usa
 
 - **Powerline-style segments** with colored backgrounds and smooth arrow transitions
 - **Reset timers** showing countdown AND absolute time until limits reset (e.g., "2h11m @ 10pm")
-- Real-time API usage (5-hour and 7-day limits)
-- Per-model availability (Opus and Sonnet with distinct colors)
+- 5-hour and 7-day usage limits, read from the data Claude Code passes to the statusline (no credentials or API calls)
+- Model name with current effort level (e.g., `opus-5-5-high`)
 - Context window monitoring with auto-compact warning
-- 1-minute smart caching
-- Automatically adapts to your Claude Pro tier (basic or higher)
+- Automatically adapts to your plan (shows 7-day limits only when present)
 
 ## Example Output
 
-**Claude Pro (higher tiers with 7-day limits):**
+**With 7-day limits:**
 ```
- opus-4-5  project  main
+ opus-5-5-high  project  main
  5h 27%  2h11m @ 10pm   7d 34%  4d2h @ Dec 2
- Opus 34%  Sonnet 20%
+ CTX 35.2K 17%
 ```
 
-**Claude Pro (basic tier):**
+**5-hour limit only:**
 ```
- sonnet-4-5  project  main
+ sonnet-5-medium  project  main
  5h 45%  3h30m @ 2pm
 ```
 
 **Color scheme:**
-- Magenta: Model name, Opus limit
-- Yellow: Project directory
-- Green: Git branch
-- Cyan: Usage percentages
-- Blue: Reset countdowns, Sonnet limit
-- Gray: Context info
+Dark purple theme: model name, project, branch, usage limits and reset countdowns each get their own shade; context info is gray.
 
 ## Prerequisites
 
-- Claude Code (installed and authenticated)
+- Claude Code (a version that passes `rate_limits` to the statusline; usage rows are hidden otherwise)
 - `jq` - JSON processor
-- `curl` - HTTP client
 - Terminal with 256-color support
 
 ```bash
@@ -54,7 +47,7 @@ sudo apt-get install jq
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/alexfazio/cc-poor-mans-statusline.git
+git clone https://github.com/karolat/cc-poor-mans-statusline.git
 cd cc-poor-mans-statusline
 
 # 2. Make the script executable
@@ -80,14 +73,11 @@ Replace `/path/to/` with the actual location where you cloned the repo. For exam
 
 > **Tip:** You can also use `~` for your home directory in the path.
 
-Your credentials at `~/.claude/.credentials.json` are used automatically.
-
 ## Customization
 
 Edit `statusline.sh`:
 
 ```bash
-CACHE_TTL=60  # API cache duration in seconds
 CONTEXT_WINDOW=200000  # Model context window size
 AUTO_COMPACT_THRESHOLD=160000  # Warning threshold (80%)
 ```
@@ -95,11 +85,7 @@ AUTO_COMPACT_THRESHOLD=160000  # Warning threshold (80%)
 ## Troubleshooting
 
 **No usage data showing?**
-- Verify credentials exist: `ls ~/.claude/.credentials.json`
-- Test API manually: `curl -s -H "Authorization: Bearer $(jq -r '.claudeAiOauth.accessToken' ~/.claude/.credentials.json)" -H "anthropic-beta: oauth-2025-04-20" "https://api.anthropic.com/api/oauth/usage" | jq .`
-
-**Script running slowly?**
-- Increase cache TTL: `CACHE_TTL=300`
+- Usage limits come from the `rate_limits` field Claude Code sends to the statusline. It may be missing until the first response of a session, or on older Claude Code versions (update with `claude update`)
 
 **Context not showing?**
 - Context only appears during active conversations
@@ -110,9 +96,4 @@ AUTO_COMPACT_THRESHOLD=160000  # Warning threshold (80%)
 
 ## Security
 
-Never commit:
-- `~/.claude/.credentials.json` (your OAuth token)
-- `/tmp/claude-usage-cache.json` (usage data)
-- Screenshots with personal info
-
-The included `.gitignore` prevents accidental leaks.
+The script never reads your credentials or makes network requests. Everything it shows comes from the JSON Claude Code pipes to it, plus `git` for the branch name.
