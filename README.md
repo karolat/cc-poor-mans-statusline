@@ -78,9 +78,10 @@ Replace `/path/to/` with the actual location where you cloned the repo. For exam
 Edit `statusline.sh`:
 
 ```bash
-CONTEXT_WINDOW=200000  # Model context window size
-AUTO_COMPACT_THRESHOLD=160000  # Warning threshold (80%)
+AUTO_COMPACT_PERCENT=80  # Show ⚠️ when context use passes this percentage
 ```
+
+The context window size is read from Claude Code's input, so the percentage matches whichever model you're using (200K by default if it isn't provided).
 
 ## Troubleshooting
 

@@ -128,8 +128,9 @@ format_absolute_time() {
 # CONTEXT USAGE FUNCTIONS
 # ============================================
 
-CONTEXT_WINDOW=200000  # Claude Sonnet 4.5 context window
-AUTO_COMPACT_THRESHOLD=160000  # 80% of context window
+# Context window size comes from Claude Code's input, so it matches the current model
+CONTEXT_WINDOW=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
+AUTO_COMPACT_PERCENT=80  # Warn above this share of the context window
 
 # Function to format percentage with color coding
 format_percentage() {
@@ -172,59 +173,17 @@ format_token_count() {
     fi
 }
 
-# Function to calculate context tokens from transcript
+# Function to calculate context tokens (input side of the latest request)
 calculate_context_tokens() {
-    local transcript_path="$1"
-
-    # Check if transcript exists
-    if [ ! -f "$transcript_path" ]; then
-        return 1
-    fi
-
-    # Read last 100 lines in reverse, find first valid usage
-    local context_tokens=0
-    while IFS= read -r line; do
-        # Skip sidechain and error messages
-        if echo "$line" | grep -q '"isSidechain":true'; then
-            continue
-        fi
-        if echo "$line" | grep -q '"isApiErrorMessage":true'; then
-            continue
-        fi
-
-        # Check if line has usage object
-        if echo "$line" | grep -q '"usage":{'; then
-            # Extract tokens
-            local input_tokens
-            input_tokens=$(echo "$line" | jq -r '.message.usage.input_tokens // 0' 2>/dev/null)
-            local cache_read
-            cache_read=$(echo "$line" | jq -r '.message.usage.cache_read_input_tokens // 0' 2>/dev/null)
-            local cache_create
-            cache_create=$(echo "$line" | jq -r '.message.usage.cache_creation_input_tokens // 0' 2>/dev/null)
-
-            # Calculate context (input side only)
-            context_tokens=$((input_tokens + cache_read + cache_create))
-            break  # Found most recent, stop
-        fi
-    done < <(tail -n 100 "$transcript_path" 2>/dev/null | tail -r 2>/dev/null || tail -n 100 "$transcript_path" 2>/dev/null | awk '{lines[NR]=$0} END {for(i=NR;i>0;i--) print lines[i]}')
-
-    echo "$context_tokens"
+    echo "$input" | jq -r '.context_window.current_usage // empty
+        | (.input_tokens // 0) + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)'
 }
 
 # Function to format context display (returns string)
 format_context() {
-    # Extract transcript path from input
-    local transcript_path
-    transcript_path=$(echo "$input" | jq -r '.transcript_path // empty')
-
-    if [ -z "$transcript_path" ]; then
-        echo ""  # Return empty string if no transcript
-        return
-    fi
-
     # Calculate context tokens
     local context_tokens
-    context_tokens=$(calculate_context_tokens "$transcript_path")
+    context_tokens=$(calculate_context_tokens)
 
     if [ -z "$context_tokens" ] || [ "$context_tokens" -eq 0 ]; then
         echo ""  # Return empty string if no context data
@@ -239,9 +198,9 @@ format_context() {
     local formatted_tokens
     formatted_tokens=$(format_token_count "$context_tokens")
 
-    # Check if approaching auto-compact threshold (> 80%)
+    # Check if approaching auto-compact threshold
     local warning=""
-    if [ "$context_tokens" -gt "$AUTO_COMPACT_THRESHOLD" ]; then
+    if [ "$percentage" -gt "$AUTO_COMPACT_PERCENT" ]; then
         warning=" ⚠️"
     fi
 
@@ -333,6 +292,9 @@ if [ -n "$five_hour" ]; then
     fi
 
     printf "%b\n" "$row2"
+else
+    # No rate_limits yet (Claude Code sends them after the session's first response)
+    printf "%b\n" "$(pl_segment_end $C_SLATE $C_WHITE "5h --")"
 fi
 
 # ============================================
